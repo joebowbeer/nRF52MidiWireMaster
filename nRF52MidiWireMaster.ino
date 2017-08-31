@@ -2,10 +2,12 @@
  * 
  * USB MIDI to BLE MIDI converter for Adafruit and SparkFun nRF52 boards.
  * 
- * USB MIDI messages received by an Arduino connected to a USB Host Shield
- * are fowarded by the nRF52 board as BLE MIDI. Install this sketch on the 
- * nRF52 board and install UsbMidiWireSlave on the Arduino connected to the 
- * USB Host Shield.
+ * MIDI messages from a USB MIDI instrument are received by a USB Host Shield
+ * attached to another Arduino, fowarded to the nF52 board running this sketch, 
+ * and then transmitted as BLE MIDI messages.
+ * 
+ * Run this sketch on a nRF52 board and run the UsbMidiWireSlave sketch on an 
+ * Arduino connected to a USB Host Shield. The two sketches communicate using I2C.
  * 
  * Connections:
  * 
