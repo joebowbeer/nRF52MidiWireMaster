@@ -1,6 +1,6 @@
 /* nRF52MidiWireMaster
  * 
- * USB MIDI to BLE MIDI converter for Adafruit and SparkFun nRF52 boards.
+ * USB MIDI to BLE MIDI converter for Adafruit and SparkFun nRF52 breakout boards.
  * 
  * MIDI messages from a USB MIDI instrument are received by a USB Host Shield
  * attached to another Arduino, fowarded to the nF52 board running this sketch, 
@@ -14,10 +14,13 @@
  * 1. nRF52 SDA/SCL to Arduino SDA/SCL using bidirectional level shifter
  * 2. nRF52 RST to Arduino RST
  * 
- * Adafruit Bluefruit nRF52 Feather: SDA(25) and SCL(26) require external 
+ * NOTES:
+ * 
+ * 1. Adafruit Bluefruit nRF52 Feather's SDA(25) and SCL(26) require external 
  * pull-up resistors (4k7)
  *  
- * SparkFun nRF52 Breakout: Redefine SDA(24) and SCL(25) in variants.h
+ * 2. SparkFun nRF52 Breakout requires SDA(24) and SCL(25) to be redefined in 
+ * variants.h
  */
 
 #include <BLEPeripheral.h>
