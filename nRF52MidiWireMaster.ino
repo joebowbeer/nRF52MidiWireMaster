@@ -9,9 +9,9 @@
  * Run this sketch on a nRF52 board and run the UsbMidiWireSlave sketch on an 
  * Arduino connected to a USB Host Shield. The two sketches communicate using I2C.
  * 
- * Connections:
+ * Connections using bidirectional level shifter:
  * 
- * 1. nRF52 SDA/SCL to Arduino SDA/SCL using bidirectional level shifter
+ * 1. nRF52 SDA/SCL to Arduino SDA/SCL
  * 2. nRF52 RST to Arduino RST
  * 
  * NOTES:
