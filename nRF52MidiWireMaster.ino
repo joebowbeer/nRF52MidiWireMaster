@@ -57,16 +57,13 @@ boolean connected;
 uint8_t midiData[BLE_PACKET_SIZE];
 int byteOffset = 0;
 uint8_t lastStatus;
-uint32_t lastTime;
+uint16_t lastTime;
 
 void setup() {
   connected = false;
-
   pinMode(LED_PIN, OUTPUT);
   displayConnectionState();
-
   setupBle();
-
   Wire.begin();
   delay(1000); // wait for slave setup
 }
@@ -78,8 +75,7 @@ void loop() {
 
   uint8_t message[3];
   while (!isFull() && receive(message) && connected) {
-    if (!handle(message)) continue;
-    loadMessage(message[0], message[1], message[2]);
+    dispatch(message);
   }
   sendMessages();
 }
@@ -99,15 +95,21 @@ boolean receive(uint8_t message[]) {
   return false;
 }
 
-boolean handle(uint8_t message[]) {
-  uint8_t event = message[0] & 0xf0;
-  switch (event) {
+// returns false if loadMessage failed due to overflow 
+boolean dispatch(uint8_t message[]) {
+  switch (message[0] & 0xF0) {
     case 0x80: // Note Off
     case 0x90: // Note On
-    case 0xb0: // Control Change
-      return true;
+    case 0xA0: // After Touch Poly
+    case 0xB0: // Control Change
+    case 0xE0: // Pitch Bend
+      return loadMessage(3, message[0], message[1], message[2]);
+
+    case 0xC0: // Program Change
+    case 0xD0: // After Touch Channel
+      return loadMessage(2, message[0], message[1], 0);
   }
-  return false;
+  return true;
 }
 
 void displayConnectionState() {
@@ -129,7 +131,7 @@ void setupBle() {
   BLE.addAttribute(midiChar);
 
   // set an initial value for the characteristic
-  sendMessage(0, 0, 0);
+  sendMessage(3, 0, 0, 0);
 
   BLE.begin();
 }
@@ -142,35 +144,36 @@ boolean isFull() {
   return byteOffset > BLE_PACKET_SIZE - 4;
 }
 
-boolean loadMessage(uint8_t status, uint8_t byte1, uint8_t byte2) {
+boolean loadMessage(int msglen, uint8_t status, uint8_t byte1, uint8_t byte2) {
   // Assert BLE_PACKET_SIZE > 4
   if (isFull()) return false;
-  uint32_t timestamp = (uint32_t) millis();
-  boolean empty = isEmpty();
-  if (empty) {
+  boolean wasEmpty = isEmpty();
+  uint16_t timestamp = (uint16_t) millis();
+  uint8_t msgTs = timestamp;
+  msgTs |= 1 << 7;  // set the 7th bit
+  if (wasEmpty) {
     uint8_t headTs = timestamp >> 7;
     headTs |= 1 << 7;  // set the 7th bit
     headTs &= ~(1 << 6);  // clear the 6th bit
     midiData[byteOffset++] = headTs;
   }
-  if (empty || lastStatus != status || lastTime != timestamp) {
-    uint8_t msgTs = timestamp;
-    msgTs |= 1 << 7;  // set the 7th bit
+  if (wasEmpty || lastStatus != status) {
     midiData[byteOffset++] = msgTs;
     midiData[byteOffset++] = status;
-    midiData[byteOffset++] = byte1;
-    midiData[byteOffset++] = byte2;
-    lastStatus = status;
-    lastTime = timestamp;
-  } else {
-    midiData[byteOffset++] = byte1;
+  } else if (lastTime != timestamp) {
+    midiData[byteOffset++] = msgTs;   
+  }
+  midiData[byteOffset++] = byte1;
+  if (msglen == 3) {
     midiData[byteOffset++] = byte2;
   }
+  lastStatus = status;
+  lastTime = timestamp;
   return true;
 }
 
-boolean sendMessage(uint8_t status, uint8_t byte1, uint8_t byte2) {
-  return loadMessage(status, byte1, byte2) && sendMessages();
+boolean sendMessage(int msglen, uint8_t status, uint8_t byte1, uint8_t byte2) {
+  return loadMessage(msglen, status, byte1, byte2) && sendMessages();
 }
 
 boolean sendMessages() {
