@@ -25,6 +25,7 @@
 
 #include <BLEPeripheral.h>
 #include <Wire.h>
+#include "BleMidiEncoder.h"
 
 #if defined(ARDUINO_FEATHER52)
 
@@ -44,20 +45,21 @@
 
 const uint8_t SLAVE_ADDRESS = 0x42;
 
-#define BLE_PACKET_SIZE 20
-
 // BLE MIDI
 BLEPeripheral BLE;
 BLEService midiSvc("03B80E5A-EDE8-4B33-A751-6CE34EC4C700");
 BLECharacteristic midiChar("7772E5DB-3868-4112-A1A9-F2669D106BF3",
-    BLEWrite | BLEWriteWithoutResponse | BLENotify | BLERead, BLE_PACKET_SIZE);
+    BLEWrite | BLEWriteWithoutResponse | BLENotify | BLERead,
+    BLE_MIDI_PACKET_SIZE);
 
+class NordicBleMidiEncoder: public BleMidiEncoder {
+  boolean setValue(const unsigned char value[], unsigned char length) {
+    return midiChar.setValue(value, length);
+  }
+};
+
+NordicBleMidiEncoder encoder;
 boolean connected;
-
-uint8_t midiData[BLE_PACKET_SIZE];
-int byteOffset = 0;
-uint8_t lastStatus;
-uint16_t lastTime;
 
 void setup() {
   connected = false;
@@ -74,10 +76,10 @@ void loop() {
   displayConnectionState();
 
   uint8_t message[3];
-  while (!isFull() && receive(message) && connected) {
+  while (!encoder.isFull() && receive(message) && connected) {
     dispatch(message);
   }
-  sendMessages();
+  encoder.sendMessages();
 }
 
 boolean receive(uint8_t message[]) {
@@ -95,7 +97,7 @@ boolean receive(uint8_t message[]) {
   return false;
 }
 
-// returns false if loadMessage failed due to overflow 
+// returns false if encoder failed due to overflow 
 boolean dispatch(uint8_t message[]) {
   switch (message[0] & 0xF0) {
     case 0x80: // Note Off
@@ -103,11 +105,11 @@ boolean dispatch(uint8_t message[]) {
     case 0xA0: // After Touch Poly
     case 0xB0: // Control Change
     case 0xE0: // Pitch Bend
-      return loadMessage(3, message[0], message[1], message[2]);
+      return encoder.appendMessage(message[0], message[1], message[2]);
 
     case 0xC0: // Program Change
     case 0xD0: // After Touch Channel
-      return loadMessage(2, message[0], message[1], 0);
+      return encoder.appendMessage(message[0], message[1]);
   }
   return true;
 }
@@ -131,55 +133,8 @@ void setupBle() {
   BLE.addAttribute(midiChar);
 
   // set an initial value for the characteristic
-  sendMessage(3, 0, 0, 0);
+  encoder.sendMessage(0, 0, 0);
 
   BLE.begin();
-}
-
-boolean isEmpty() {
-  return byteOffset == 0;
-}
-
-boolean isFull() {
-  return byteOffset > BLE_PACKET_SIZE - 4;
-}
-
-boolean loadMessage(int msglen, uint8_t status, uint8_t byte1, uint8_t byte2) {
-  // Assert BLE_PACKET_SIZE > 4
-  if (isFull()) return false;
-  boolean wasEmpty = isEmpty();
-  uint16_t timestamp = (uint16_t) millis();
-  uint8_t msgTs = timestamp;
-  msgTs |= 1 << 7;  // set the 7th bit
-  if (wasEmpty) {
-    uint8_t headTs = timestamp >> 7;
-    headTs |= 1 << 7;  // set the 7th bit
-    headTs &= ~(1 << 6);  // clear the 6th bit
-    midiData[byteOffset++] = headTs;
-  }
-  if (wasEmpty || lastStatus != status) {
-    midiData[byteOffset++] = msgTs;
-    midiData[byteOffset++] = status;
-  } else if (lastTime != timestamp) {
-    midiData[byteOffset++] = msgTs;   
-  }
-  midiData[byteOffset++] = byte1;
-  if (msglen == 3) {
-    midiData[byteOffset++] = byte2;
-  }
-  lastStatus = status;
-  lastTime = timestamp;
-  return true;
-}
-
-boolean sendMessage(int msglen, uint8_t status, uint8_t byte1, uint8_t byte2) {
-  return loadMessage(msglen, status, byte1, byte2) && sendMessages();
-}
-
-boolean sendMessages() {
-  if (isEmpty()) return false;
-  midiChar.setValue(midiData, byteOffset);
-  byteOffset = 0;
-  return true;
 }
 
