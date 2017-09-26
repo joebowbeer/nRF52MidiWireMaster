@@ -76,10 +76,14 @@ void loop() {
   displayConnectionState();
 
   uint8_t message[3];
-  while (!encoder.isFull() && receive(message) && connected) {
-    dispatch(message);
+  boolean overflow = false;
+  while (!overflow && receive(message) && connected) {
+    overflow = !dispatch(message);
   }
   encoder.sendMessages();
+  if (overflow) {
+    dispatch(message);
+  }
 }
 
 boolean receive(uint8_t message[]) {
